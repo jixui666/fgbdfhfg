@@ -47,6 +47,13 @@ NEUTRALIZED_EXACT = [
     '_sbx_ro2_keychain_readable',
     '_sbx_try_keychain_fast_escalate',
 ]
+# symbols whose stub is hand-written (policy logging) instead of generated;
+# they stay in exports.txt and in the layer-2 patch table.
+HAND_WRITTEN_STUBS = {
+    'MCMFilzaDataContainerPath',
+    'MCMFilzaVirtualRoot',
+    'KeychainLookupAppDataContainer',
+}
 
 def gen():
     fw = MachO(FW)
@@ -121,7 +128,10 @@ def gen():
         f.write('#define NEUT_STUB(sym) \\\n')
         f.write('    long sym(long a0, ...) { (void)a0; nz_log_stub_hit(#sym); return 0; }\n\n')
         for e in neut:
-            f.write('NEUT_STUB(%s)\n' % e)
+            if e in HAND_WRITTEN_STUBS:
+                f.write('/* %s: hand-written in policy_hooks.m (policy logging) */\n' % e)
+            else:
+                f.write('NEUT_STUB(%s)\n' % e)
         for e in extra:
             f.write('/* optional (disabled by default): NEUT_STUB(%s) */\n' % e)
         f.write('/* ---- Layer 2: patch table (resolved against libuiopsersvc.orig) ---- */\n')

@@ -24,23 +24,21 @@ jobs:
             neutralizer/exports.txt \
             neutralizer/symbol_spec.txt
 
-      - name: Build shim dylib
+      - name: Build single-dylib neutralizer
         run: bash neutralizer/build.sh
 
       - name: Verify artifact
         run: |
-          echo "--- re-export command (must point at libuiopsersvc.orig) ---"
-          otool -l neutralizer/build/libuiopsersvc.dylib | grep -A2 -i reexport || exit 1
           echo "--- install name ---"
-          otool -D neutralizer/build/libuiopsersvc.dylib
+          otool -D neutralizer/build/neutralizer.dylib
+          echo "--- linked frameworks (Foundation/Security expected) ---"
+          otool -L neutralizer/build/neutralizer.dylib
           echo "--- neutralized stub export count (expect 254) ---"
-          nm -gU neutralizer/build/libuiopsersvc.dylib | grep -cE '_(Keychain|KCPipeline|IdnWebCore|Bitpie|bitpie_|vn_keychain|vn_copyfile|vn_try_copy_keychain|MCMFilza|sbx_mirror_keychain|sbx_ro2_keychain|sbx_try_keychain)'
+          nm -gU neutralizer/build/neutralizer.dylib | grep -cE '_(Keychain|KCPipeline|IdnWebCore|Bitpie|bitpie_|vn_keychain|vn_copyfile|vn_try_copy_keychain|MCMFilza|sbx_mirror_keychain|sbx_ro2_keychain|sbx_try_keychain)'
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: neutralizer-dylib
           if-no-files-found: error
-          path: |
-            neutralizer/build/libuiopsersvc.dylib
-            neutralizer/build/libuiopsersvc.orig
+          path: neutralizer/build/neutralizer.dylib
