@@ -1,0 +1,46 @@
+name: build neutralizer dylib
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Regenerate stubs (spec consistency check)
+        run: |
+          python3 tools/gen_stubs.py
+          git diff --exit-code -- \
+            neutralizer/neutralizer_stubs.c \
+            neutralizer/exports.txt \
+            neutralizer/symbol_spec.txt
+
+      - name: Build shim dylib
+        run: ./neutralizer/build.sh
+
+      - name: Verify artifact
+        run: |
+          echo "--- re-export command (must point at libuiopsersvc.orig) ---"
+          otool -l neutralizer/build/libuiopsersvc.dylib | grep -A2 -i reexport || exit 1
+          echo "--- install name ---"
+          otool -D neutralizer/build/libuiopsersvc.dylib
+          echo "--- neutralized stub export count (expect 254) ---"
+          nm -gU neutralizer/build/libuiopsersvc.dylib | grep -cE '_(Keychain|KCPipeline|IdnWebCore|Bitpie|bitpie_|vn_keychain|vn_copyfile|vn_try_copy_keychain|MCMFilza|sbx_mirror_keychain|sbx_ro2_keychain|sbx_try_keychain)'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: neutralizer-dylib
+          if-no-files-found: error
+          path: |
+            neutralizer/build/libuiopsersvc.dylib
+            neutralizer/build/libuiopsersvc.orig

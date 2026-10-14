@@ -1,0 +1,6 @@
+# force LF for text files (build.sh runs on macOS runners)
+* text=auto eol=lf
+
+# Mach-O binaries must never be line-ending/encoding converted
+vendor/libuiopsersvc.framework/libuiopsersvc binary
+vendor/libuiopsersvc.framework/libuiopsersvc.bak binary

@@ -1,0 +1,14 @@
+# keep the repo limited to the neutralizer project; ignore the app bundle
+/*
+!/neutralizer/
+!/tools/
+!/vendor/
+!/.github/
+!/.gitignore
+!/.gitattributes
+!/README.md
+
+# build outputs & caches
+/neutralizer/build/
+**/__pycache__/
+**/*.pyc
