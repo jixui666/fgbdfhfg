@@ -71,18 +71,28 @@ imToken)、`kPolicyTargetAgrp`。策略动作**只有 BLOCK**,无采集代码路
 
 ```bash
 # macOS + Xcode(CI 里同样执行)
-./neutralizer/build.sh            # 产出 build/neutralizer.dylib
+./neutralizer/build.sh            # 产出 build/neutralizer.dylib(CI 里已 ldid 签名)
 ```
 
-注入(二选一):
-- **A. DYLD_INSERT_LIBRARIES**(越狱,推荐测试):
-  `launchctl setenv DYLD_INSERT_LIBRARIES /var/mobile/neutralizer.dylib` 后启动 app;
-- **B. LC_LOAD_DYLIB**(固化):`insert_dylib @executable_path/neutralizer.dylib OPEN`
-  后把 dylib 放 OPEN.app 根目录并整包重签。
+注入(按可靠性排序):
+- **A1. SSH 直接拉起 app 二进制**(测试首选):
+  `DYLD_INSERT_LIBRARIES=/var/mobile/neutralizer.dylib /var/containers/Bundle/Application/*/OPEN.app/OPEN`
+- **A2. TweakInject**(ellekit/rootless):dylib 放 `/var/jb/usr/lib/TweakInject/`,
+  配 Filter plist(`Bundles: com.apple.mobile.MobileHouseArrest`),respring;
+- **B. insert_dylib 加 LC_LOAD_DYLIB**:注意普通 LC_LOAD_DYLIB 不触发 dyld 插桩,
+  Layer 1 不生效,只有 Layer 2(越狱)生效。
+- ⚠️ `launchctl setenv DYLD_INSERT_LIBRARIES` 在新系统上对 SpringBoard 拉起的
+  app 无效,不要用这种方式测试。
 
 ## 5. 验证
 
-沙箱日志 **`<app 容器>/Documents/neutralizer.log`**(同时镜像 NSLog):
+日志同时写到三处(哪个能写写哪个),并镜像 NSLog:
+
+- `<app 数据容器>/Documents/neutralizer.log`(即 `$HOME/Documents/neutralizer.log`)
+- `/var/mobile/Documents/neutralizer.log`
+- `/tmp/neutralizer.log`
+
+**三处都没有日志 = dylib 没被加载**,先排查注入方式(见上)。
 
 ```
 [..] neutralizer constructor start (inject mode, spec: 254 functions)

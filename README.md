@@ -20,41 +20,70 @@ GitHub Actions 编译出**单个 dylib**,注入后让
 neutralizer.dylib
 ```
 
-## 注入方式(二选一,都不需要替换/改名框架里的文件)
+## 注入方式(按可靠性排序)
 
-### A. DYLD_INSERT_LIBRARIES(越狱环境,推荐测试用)
+> 注意:`launchctl setenv DYLD_INSERT_LIBRARIES` 在较新的 iOS/rootless 越狱上
+> **不会**传给 SpringBoard 拉起的 app,所以别用这种方式测,用下面的 A1/A2。
 
-把 `neutralizer.dylib` 放到设备上(如 `/var/mobile/neutralizer.dylib`),然后:
-
-```bash
-launchctl setenv DYLD_INSERT_LIBRARIES /var/mobile/neutralizer.dylib
-# 重新启动 OPEN(app 由 SpringBoard 拉起时继承该环境变量)
-```
-
-测完清除:`launchctl unsetenv DYLD_INSERT_LIBRARIES`
-
-### B. 给 OPEN 加 LC_LOAD_DYLIB(固化注入)
-
-macOS 上用 insert_dylib/optool:
+### A1. SSH 直接拉起 app 二进制(最可靠,测试首选)
 
 ```bash
-cp neutralizer.dylib OPEN.app/neutralizer.dylib
-insert_dylib @executable_path/neutralizer.dylib OPEN.app/OPEN
-# 整包重签(必须)
-ldid -S OPEN.app   # 或 codesign -f -s "..." --deep OPEN.app
+# 设备上(SSH):
+scp neutralizer.dylib root@<device>:/var/mobile/
+ldid -S /var/mobile/neutralizer.dylib     # CI 产物已签过名,可跳过
+DYLD_INSERT_LIBRARIES=/var/mobile/neutralizer.dylib \
+  /var/containers/Bundle/Application/*/OPEN.app/OPEN
 ```
+
+### A2. TweakInject(ellekit/palera1n rootless 等)
+
+```bash
+cp neutralizer.dylib /var/jb/usr/lib/TweakInject/neutralizer.dylib
+```
+
+配一个 plist(同目录,文件名如 `neutralizer.plist`):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Filter</key>
+  <dict>
+    <key>Bundles</key>
+    <array><string>com.apple.mobile.MobileHouseArrest</string></array>
+  </dict>
+</dict></plist>
+```
+
+然后 respring,再正常打开 OPEN。
+
+### B. insert_dylib 加 LC_LOAD_DYLIB(注意局限)
+
+普通 `LC_LOAD_DYLIB` **不触发 dyld 插桩**,Layer 1 的 stub 不会接管 app 侧调用;
+此方式只有 Layer 2(越狱 + 可写代码页)生效。要验证完整拦截请用 A1/A2。
 
 ## 运行后验证
 
-沙箱日志 **`<app 容器>/Documents/neutralizer.log`**:
+日志同时写到三处(哪个能写写哪个):
+
+- `<app 数据容器>/Documents/neutralizer.log`(即 `$HOME/Documents/neutralizer.log`)
+- `/var/mobile/Documents/neutralizer.log`
+- `/tmp/neutralizer.log`
+
+另镜像到 NSLog(设备 Console/Xcode 可见)。**只要 dylib 被加载,至少 `/tmp/neutralizer.log`
+里一定会有构造日志**;如果三处都没有日志 = dylib 根本没被加载,先检查注入方式。
 
 ```
 [..] neutralizer constructor start (inject mode, spec: 254 functions)
+[..] diag: images=NN self_idx=N fw_idx=N
+[..] diag: HOME=/var/mobile/Containers/Data/Application/…
+[..] diag: DYLD_INSERT_LIBRARIES=/var/mobile/neutralizer.dylib
 [..] POLICY mode=block-all (no collection compiled in)
 [..] POLICY selected target: im.token.app (agrp pattern: im.token) - BLOCKED like all others
 [..] POLICY original-list[00] im.token.app -> BLOCKED (selected target)
 [..] POLICY original-list[01] vip.mytokenpocket -> BLOCKED
       ...
+[..] diag: patching framework image …/libuiopsersvc.framework/libuiopsersvc
 [..] layer 2: 254 patched, 0 skipped (layer 1 stubs still active)
 [..] STUB-HIT(first) KeychainOneClickSlotAvailable (total hits 1)
 [..] POLICY MCMFilzaDataContainerPath(id=(n/a)) -> BLOCKED (original-list=no, target-imToken=no, mode=block-all)

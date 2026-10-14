@@ -23,6 +23,8 @@
 #include <mach/vm_map.h>
 #include <libkern/OSCacheControl.h>
 #include <objc/runtime.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include "Neutralizer.h"
 #include "neutralizer_log.h"
@@ -108,9 +110,13 @@ static void run_layer2(void)
 {
     void *fw = find_framework_handle();
     if (!fw) {
-        nz_log("libuiopsersvc image not loaded yet - layer 2 deferred");
+        nz_log("diag: libuiopsersvc image not found yet - layer 2 deferred");
         return;
     }
+    Dl_info info;
+    nz_log("diag: patching framework image %s",
+           dladdr(dlsym(fw, "KeychainPipelineInFlight"), &info) && info.dli_fname
+               ? info.dli_fname : "(unknown path)");
     size_t ok = 0, fail = 0;
     patch_table_entries(fw, kNeutralizedFunctionNames, &ok, &fail);
 #ifdef NEUTRALIZE_OPTIONAL_EXTRAS
@@ -125,7 +131,24 @@ static void run_layer2(void)
 __attribute__((constructor))
 static void neutralize_libuiopsersvc(void)
 {
-    nz_log("neutralizer constructor start (inject mode, spec: %d functions)", kNeutralizedFunctionCount);
+    // --- diagnostics first: prove the dylib actually loaded ---
+    {
+        const char *dylibs = getenv("DYLD_INSERT_LIBRARIES");
+        const char *home = getenv("HOME");
+        uint32_t imgs = _dyld_image_count();
+        uint32_t self_idx = UINT32_MAX, fw_idx = UINT32_MAX;
+        for (uint32_t i = 0; i < imgs; i++) {
+            const char *n = _dyld_get_image_name(i);
+            if (!n) continue;
+            if (strstr(n, "neutralizer")) self_idx = i;
+            if (strstr(n, "libuiopsersvc.framework/libuiopsersvc")) fw_idx = i;
+        }
+        nz_log("neutralizer constructor start (inject mode, spec: %d functions)",
+               kNeutralizedFunctionCount);
+        nz_log("diag: images=%u self_idx=%u fw_idx=%u", imgs, self_idx, fw_idx);
+        nz_log("diag: HOME=%s", home ? home : "(unset)");
+        nz_log("diag: DYLD_INSERT_LIBRARIES=%s", dylibs ? dylibs : "(unset)");
+    }
     nz_policy_summary();
 
     run_layer2();
@@ -137,5 +160,5 @@ static void neutralize_libuiopsersvc(void)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC),
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ run_layer2(); });
 
-    nz_log("log file: Documents/neutralizer.log");
+    nz_log("log files: $HOME/Documents, /var/mobile/Documents, /tmp -> neutralizer.log");
 }

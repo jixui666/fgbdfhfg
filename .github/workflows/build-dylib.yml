@@ -27,6 +27,12 @@ jobs:
       - name: Build single-dylib neutralizer
         run: bash neutralizer/build.sh
 
+      - name: Ad-hoc sign the dylib (ldid)
+        run: |
+          brew install ldid || true
+          ldid -S neutralizer/build/neutralizer.dylib
+          echo "signed OK"
+
       - name: Verify artifact
         run: |
           echo "--- install name ---"
