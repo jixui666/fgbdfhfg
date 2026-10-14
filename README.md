@@ -17,15 +17,20 @@
 
 ## 安装到 app(设备侧)
 
+CI 产物里的两个文件**都要**放进同一个 framework 目录,缺一不可:
+
 ```bash
-# 1. 原二进制改名(若还没改)
-mv OPEN.app/Frameworks/libuiopsersvc.framework/libuiopsersvc \
-   OPEN.app/Frameworks/libuiopsersvc.framework/libuiopsersvc.orig
-# 2. 放入 CI 产物
+# .orig 是已改好 install name 的原二进制(shim 的重导出目标)
+cp libuiopsersvc.orig  OPEN.app/Frameworks/libuiopsersvc.framework/libuiopsersvc.orig
+# shim 替换原二进制(app 绑定的是这个名字)
 cp libuiopsersvc.dylib OPEN.app/Frameworks/libuiopsersvc.framework/libuiopsersvc
-# 3. 整包重签(必须,否则 iOS 拒启)
+# 整包重签(必须,否则 iOS 拒启)
 ldid -S OPEN.app   # 或 codesign -f -s "..." --deep OPEN.app
 ```
+
+不要自己 `mv` 本地原文件当 `.orig`(其 install name 未改);若坚持用本地文件,
+先执行
+`install_name_tool -id @rpath/libuiopsersvc.framework/libuiopsersvc.orig <文件>`。
 
 运行后查看沙箱日志:`Documents/neutralizer.log`。
 细节(两层拦截设计、规范修改、验证判读)见
