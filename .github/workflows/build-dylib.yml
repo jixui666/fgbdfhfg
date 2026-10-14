@@ -25,7 +25,7 @@ jobs:
             neutralizer/symbol_spec.txt
 
       - name: Build shim dylib
-        run: ./neutralizer/build.sh
+        run: bash neutralizer/build.sh
 
       - name: Verify artifact
         run: |
